@@ -1,13 +1,14 @@
-import { debounce } from './utils'
+import {
+  debounce
+} from './utils'
 class PopupControl {
   options = {
     includeLayers: [], // 包含点击检测的图层数组
-    autoOpen: true,// 是否自动打开popup default: true
     emptyClose: false, // 点击空白处自动关闭 default: true
-    dragClose: true, // 地图移动时自动隐藏 default: true
-    positionType: 'auto', // 'click' | 'geometry' | 'auto' default: auto
+    dragCloseType: 'never', // 地图移动时自动隐藏 'close' | 'hide' | 'never'  default: never
+    positionType: 'geometry', // 'click' | 'geometry' default: geometry
     goto: false, // 是否开启view.goto default: false
-    transition: 500, // goTo持续时长（毫秒） default: 1000
+    transition: 800, // goTo持续时长（毫秒） default: 800
     goToZoom: () => this.view.zoom, // default: view.zoom
   }
   view // MapView 对象
@@ -15,27 +16,30 @@ class PopupControl {
   #isOpen = false
   #viewOnClick
   #viewWatchCenter
-  #beforeClose
-  #beforeOpen
-  popupData = {
-    left: 0,
-    top: 0,
-    selectGraphic: undefined
-  }
+  #close
+  #open
+  #doNotClose = false
+  #timer = null
+  left = 0
+  top = 0
+  attributes = {}
 
   constructor({
     view,
-    beforeOpen,
-    beforeClose,
+    open,
+    close,
     ...rest
   }) {
     if (!view) {
       throw new Error('view无效')
     }
     this.view = view
-    this.#beforeOpen = beforeOpen
-    this.#beforeClose = beforeClose
-    this.options = { ...this.options, ...rest}
+    this.#open = open
+    this.#close = close
+    this.options = {
+      ...this.options,
+      ...rest
+    }
     this.#registerMonitoring()
   }
 
@@ -44,88 +48,143 @@ class PopupControl {
    */
   #registerMonitoring = () => {
     this.#viewOnClick = this.view.on('click', this.#onMapClick)
-    this.#viewWatchCenter = this.view.watch('center',
-      debounce(() => {
-        this.#clickPointCache && this.#updatePopup(this.#clickPointCache)
-      }, this.options.transition, () => {
-        if (this.options.dragClose) {
-          this.#isOpen === false
-        } else {
+    this.#viewWatchCenter = this.view.watch('center', () => {
+      switch (this.options.dragCloseType) {
+        case 'close':
+          if (!this.#doNotClose) {
+            this.#handleClose()
+            this.#clear()
+          }
+          break;
+        case 'hide':
+          !this.#doNotClose && this.#isOpen && this.#handleClose()
+          break;
+        default:
           this.#clickPointCache && this.#updatePopup(this.#clickPointCache)
-        }
-      })
-    )
+          break;
+      }
+      if (this.#timer) {
+        clearTimeout(this.#timer)
+        this.#timer = null
+      }
+      this.#timer = setTimeout(() => {
+        this.#clickPointCache && this.#updatePopup(this.#clickPointCache)
+      }, this.options.transition);
+    })
+    
+    // debounce(() => {
+    //   this.#clickPointCache && this.#updatePopup(this.#clickPointCache)
+    // }, this.options.transition, () => {
+    //   switch (this.options.dragCloseType) {
+    //     case 'close':
+    //       if (!this.#doNotClose) {
+    //         this.#handleClose()
+    //         this.#clear()
+    //       }
+    //       break;
+    //     case 'hide':
+    //       !this.#doNotClose && this.#isOpen && this.#handleClose()
+    //       break;
+    //     default:
+    //       this.#clickPointCache && this.#updatePopup(this.#clickPointCache)
+    //       break;
+    //   }
+    // })
   }
   /**
    * 销毁
    */
   destroy = () => {
-    this.popupData.selectGraphic = undefined
-    this.#isOpen = false
+    this.#handleClose()
     this.#viewWatchCenter.remove()
     this.#viewOnClick.remove()
-
+    this.#close = null
+    this.#open = null
+    this.view = null
   }
 
   /**
- * 地图点击处理
- * @param e
- */
+   * 地图点击处理
+   * @param e
+   */
   #onMapClick = (e) => {
-  // include: 在包含的图层内做碰撞检查
-  this.view.hitTest(e, { include: this.options.includeLayers }).then(({ results }) => {
-    if (results?.length) {
-      const { graphic, graphic: { geometry, attributes } } = results[0] // 如果用重叠要素的话可能有多个返回，咱只拿第一个
-      let coordinate = undefined
-      switch (this.options.positionType) {
-        case 'auto':
-          coordinate = geometry.type === 'point' ? geometry : e.mapPoint
-          break;
-        case 'click':
-          coordinate = e.mapPoint
-          break;
-        default:
-          coordinate = geometry
-          break;
+    // include: 在包含的图层内做碰撞检查
+    this.view.hitTest(e, {
+      include: this.options.includeLayers
+    }).then(({
+      results
+    }) => {
+      if (results?.length) {
+        const {
+          graphic,
+          graphic: {
+            geometry,
+            attributes
+          }
+        } = results[0] // 如果用重叠要素的话可能有多个返回，咱只拿第一个
+        this.attributes = attributes
+
+        switch (this.options.positionType) {
+          case 'click':
+            this.#clickPointCache = e.mapPoint
+            break;
+          default:
+            this.#clickPointCache = geometry.type === 'point' ? geometry : geometry.extent ? geometry.extent.center : e.mapPoint
+            break;
+        }
+
+        const toZoom = typeof this.options.goToZoom === 'function' ? this.options.goToZoom() : this.options.goToZoom
+
+        if (this.options.goto) {
+          this.#handleClose()
+          this.#goToGraphic(graphic, toZoom, this.options.transition).then(() => {
+            this.#doNotClose = false
+            this.#updatePopup(this.#clickPointCache)
+          })
+        } else {
+          this.#updatePopup(this.#clickPointCache)
+        }
+      } else {
+
+        this.options.emptyClose && this.#handleClose()
+        this.options.emptyClose && this.#clear()
       }
-      this.popupData.selectGraphic = attributes
-      const toZoom = typeof this.options.goToZoom === 'function' ? this.options.goToZoom() : this.options.goToZoom
-      this.options.goto ? this.#goToGraphic(graphic, toZoom, this.options.transition).then(() => {
-        this.#updatePopup(coordinate)
-      }) : this.#updatePopup(coordinate)
-    } else {
-      this.options.emptyClose && this.close()
-    }
-  })
-}
+    })
+  }
 
   /**
    * popup显示与更新
    * @param graphic
    */
   #updatePopup = (coordinate) => {
-    const point = this.view.toScreen(coordinate) // 坐标转屏幕像素
-    this.popupData.left = point.x
-    this.popupData.top = point.y
-    this.#clickPointCache = coordinate
-    this.options.autoOpen && this.open()
+    const {x,y} = this.view.toScreen(coordinate) // 坐标转屏幕像素
+    this.left = x
+    this.top = y
+    this.#handleOpen()
   }
+
   /**
    * 关闭弹窗
    */
-  close = () => {
-    typeof this.#beforeClose === 'function' && this.#beforeClose(this.popupData)
-    this.#clickPointCache = undefined
-    this.popupData.selectGraphic = undefined
+  #handleClose() {
+   this.#clickPointCache && typeof this.#close === 'function' && this.#close()
+   this.#isOpen = false
   }
 
   /**
    * 打开弹窗
    */
-  open = () => {
-    console.log(111, typeof this.#beforeOpen)
-    typeof this.#beforeOpen === 'function' && this.#beforeOpen(this.popupData)
+  #handleOpen = () => {
+    const { left, top, attributes } = this
+    typeof this.#open === 'function' && this.#open({ left, top, attributes })
     this.#isOpen = true
+  }
+
+  /**
+   * 清除
+   */
+  #clear() {
+    this.#clickPointCache = undefined
   }
 
   /**
@@ -136,7 +195,13 @@ class PopupControl {
    * @returns Promise
    */
   #goToGraphic = (graphics, zoom, duration) => {
-    return this.view.goTo({ zoom, target: graphics }, { duration })
+    this.#doNotClose = true
+    return this.view.goTo({
+      zoom,
+      target: graphics
+    }, {
+      duration
+    })
   }
 
 }

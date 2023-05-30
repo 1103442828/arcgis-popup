@@ -1,6 +1,6 @@
 <template>
   <div class="popover-container" :style="{ '--left': props.popupData.left + 'px', '--top': props.popupData.top + 'px' }">
-    <div class="name g-ellipsis">内容：{{ props.popupData.selectGraphic }}</div>
+    <div class="name g-ellipsis">内容：{{ props.popupData.attributes }}</div>
   </div>
 </template>
 <script setup lang="js">
@@ -17,7 +17,6 @@ const props = defineProps({
     type: Number,
     default: 0,
   },
-
 })
 </script>
 <script lang="js">

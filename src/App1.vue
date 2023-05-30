@@ -1,12 +1,11 @@
 
 <template>
   <div id="map-root">
-    <MyPopup v-show="popupVisible" :popupData="popupData" />
+    <MyPopup v-show="popupVisible" :popupData="popupData"/>
   </div>
 </template>
 
 <script setup>
-import { debounce } from './utils'
 import MyPopup from './components/MyPopup.vue'
 import Map from '@arcgis/core/Map'
 import MapView from '@arcgis/core/views/MapView'
@@ -18,24 +17,31 @@ import { onMounted, onUnmounted, reactive, ref, computed, toRaw } from 'vue';
 const options = {
   autoOpen: true, // 是否自动打开popup default: true
   emptyClose: true, // 点击空白处自动关闭 default: true
-  dragClose: true, // 地图移动时自动隐藏 default: true
-  positionType: 'auto', // 'click' | 'geometry' | 'auto' default: auto
-  goto: false, // 是否开启view.goto default: false
+  dragCloseType: 'never', // 地图移动时自动隐藏 'close' | 'hide' | 'never'  default: never
+  positionType: 'geometry', // 'click' | 'geometry' default: geometry
+  goto: true, // 是否开启view.goto default: false
   transition: 500, // goTo持续时长（毫秒） default: 1000
-  goToZoom: () => view.zoom, // default: view.zoom
+  goToZoom: 13, // default: view.zoom
 }
 
 const { view, featureLayer, pointGraphicLayer } = useMap()
-const popupData = ref({left: 0, top: 0, graphic: {}})
+const popupData = reactive({left: 0, top: 0, attributes: {}})
 const popupVisible = ref(false)
-const pc = new PopupControl({view, beforeOpen: (data) => {
-  console.log(data.left)
-  popupData.value = data
-  popupVisible.value = true
-}, beforeClose: () => {
-  console.log(popupVisible.value)
-  popupVisible.value = false
-}, visible: popupVisible, includeLayers: [featureLayer, pointGraphicLayer], ...options })
+const pc = new PopupControl({
+  view,
+  includeLayers: [featureLayer, pointGraphicLayer],
+  ...options,
+  open: ({ left, top, attributes}) => {
+    console.log('open=>', left, top, attributes)
+    popupData.left = left
+    popupData.top = top
+    popupData.attributes = attributes
+    popupVisible.value = true
+  },
+  close: () => {
+    console.log('close')
+    popupVisible.value = false
+  }})
 
 
 onMounted(() => {
