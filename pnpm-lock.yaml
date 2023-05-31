@@ -3,11 +3,13 @@ lockfileVersion: 5.4
 specifiers:
   '@arcgis/core': ^4.26.5
   '@vitejs/plugin-vue': ^4.1.0
+  arcgis-popup-control: ^1.0.1
   vite: ^4.3.9
   vue: ^3.2.47
 
 dependencies:
   '@arcgis/core': registry.npmmirror.com/@arcgis/core/4.26.5
+  arcgis-popup-control: registry.npmjs.org/arcgis-popup-control/1.0.1
   vue: registry.npmmirror.com/vue/3.3.4
 
 devDependencies:
@@ -15,6 +17,12 @@ devDependencies:
   vite: registry.npmmirror.com/vite/4.3.9
 
 packages:
+
+  registry.npmjs.org/arcgis-popup-control/1.0.1:
+    resolution: {integrity: sha512-BL28rgpLfEvXEClX9S5/YxEni/e0trF9DyLKSXY4tiFjCinIx4dEsF3lX2qNIXmrL8+A/JKxgscBOfpWQZpXDw==, registry: https://registry.npm.taobao.org/, tarball: https://registry.npmjs.org/arcgis-popup-control/-/arcgis-popup-control-1.0.1.tgz}
+    name: arcgis-popup-control
+    version: 1.0.1
+    dev: false
 
   registry.npmmirror.com/@arcgis/core/4.26.5:
     resolution: {integrity: sha512-Z8KoJrTD1ZQwVVZAIpkdjAQVT/MjAaWAr5u0krifKd6Y1m0TrEb8/iK86KvyWX8yNNWEroEP9SiE19vH/JKquQ==, registry: https://registry.npm.taobao.org/, tarball: https://registry.npmmirror.com/@arcgis/core/-/core-4.26.5.tgz}
